@@ -11,7 +11,7 @@
 
 #define ADS (0x48)
 
-EnergyMonitor emon1;                   // Create an instance
+EnergyMonitor emon1, emon2;                   // Create an instance
 
 const char* ssid = "mikesnet";
 const char* password = "springchicken";
@@ -20,7 +20,7 @@ const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;  //Replace with your GMT offset (secs)
 const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
 int hours, mins, secs;
-double Irms;
+double Irms, Irms2, Irmstot;
 float power1, power2;
 String power1str = "0";
 String power2str = "0";
@@ -71,7 +71,8 @@ void printLocalTime() {
 
 void setup(void) {
   Serial.begin(9600);
-  emon1.current(ADS, true, GAIN_ONE, RATE_ADS1115_860SPS, 276.97);          // Current : input ads_address, with init ads, Gain, Data rate, calibration.
+  emon1.current(ADS, true, GAIN_ONE, RATE_ADS1115_860SPS, 112.31); //22.1ohm
+  emon2.current(ADS, true, GAIN_ONE, RATE_ADS1115_860SPS, 113.34);       //21.9ohm   // Current : input ads_address, with init ads, Gain, Data rate, calibration.
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   Serial.println("");
@@ -115,11 +116,13 @@ void setup(void) {
 
 void loop() {
       Blynk.run();
-       Irms = emon1.calcIrms(10, 1480);  // Calculate Irms only from Single A0 pin. , NUMBER_OF_SAMPLES
+       Irms = emon1.calcIrms(0, 1480);  // Calculate Irms only from Single A0 pin. , NUMBER_OF_SAMPLES
+       Irms2 = emon2.calcIrms(1, 1480);
+       Irmstot = Irms + Irms2;
       // double Irms = emon1.calcIrms(32, 1480);  // Calculate Irms only from Differential A2-A3 pins. NUMBER_OF_SAMPLES
       every(1000){
-        if ((Irms > 0) || (millis() > 20000)) {Blynk.virtualWrite(V3, Irms);
-        Blynk.virtualWrite(V2, (Irms*120.0));}
+        if (millis() > 20000) {Blynk.virtualWrite(V3, Irmstot);
+        Blynk.virtualWrite(V2, (Irmstot*120.0));}
       }
 
    
