@@ -10,13 +10,17 @@
 HardwareSerial SerialPort(2); // use UART2
 
 
- const byte numChars = 32;
-char receivedChars[numChars];   // an array to store the received data
+  // an array to store the received data
 
 boolean newData = false;
 boolean seenData = false;
 
+const byte numChars = 128;
+char receivedChars[numChars];
+char tempChars[numChars];        // temporary array for use when parsing
 
+
+long whtot, wattHour1, wattHour2;
                // Create an instance
 
 const char* ssid = "mikesnet";
@@ -26,11 +30,9 @@ const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -18000;  //Replace with your GMT offset (secs)
 const int daylightOffset_sec = 0;   //Replace with your daylight offset (secs)
 int hours, mins, secs;
-double Irms, Irms2, amps1, amps2, Irmstot;
-float power1, power2;
-String power1str = "0";
-String power2str = "0";
-String strArr[2];
+double Irmstot;
+float power1, power2, volts, freq;
+float Irms1, Irms2, realPower1, realPower2, apparentPower1, apparentPower2, powerFactor1, powerFactor2;
 
 char auth[] = "QY8w6digrc2EItvuiO6AXOmhr88Eiwld";
 char remoteAuth2[] = "8_-CN2rm4ki9P3i_NkPhxIbCiKd5RXhK"; //hubert clock auth
@@ -83,64 +85,82 @@ void printLocalTime() {
   terminal.flush();
 }
 
-void recvWithEndMarker()
-{
-   static byte ndx = 0;
-   char endMarker = '\n';
-   char rc;
+void recvWithStartEndMarkers() {
+    static boolean recvInProgress = false;
+    static byte ndx = 0;
+    char startMarker = '<';
+    char endMarker = '>';
+    char rc;
 
-   while (SerialPort.available() > 0 && newData == false)
-   {
-      rc = SerialPort.read();
+    while (SerialPort.available() > 0 && newData == false) {
+        rc = SerialPort.read();
 
-      if (rc != endMarker)
-      {
-         receivedChars[ndx] = rc;
-         ndx++;
-         if (ndx >= numChars)
-         {
-            ndx = numChars - 1;
-         }
-      }
-      else
-      {
-         receivedChars[ndx] = '\0'; // terminate the string
-         ndx = 0;
-         newData = true;
-      }
-   }
+        if (recvInProgress == true) {
+            if (rc != endMarker) {
+                receivedChars[ndx] = rc;
+                ndx++;
+                if (ndx >= numChars) {
+                    ndx = numChars - 1;
+                }
+            }
+            else {
+                receivedChars[ndx] = '\0'; // terminate the string
+                recvInProgress = false;
+                ndx = 0;
+                newData = true;
+            }
+        }
+
+        else if (rc == startMarker) {
+            recvInProgress = true;
+        }
+    }
 }
 
-void parseData()
-{
-   if (newData == true)
-   {
-      char *strings[3]; // an array of pointers to the pieces of the above array after strtok()
-      char *ptr = NULL; byte index = 0;
-      ptr = strtok(receivedChars, ",");  // delimiters, semicolon
-      while (ptr != NULL)
-      {
-         strings[index] = ptr;
-         index++;
-         ptr = strtok(NULL, ",");
-      }
-      /*
-      // print all the parts   
-      Serial.println("The Pieces separated by strtok()");
-      for (int n = 0; n < index; n++)
-      {
-         Serial.print("piece ");
-         Serial.print(n);
-         Serial.print(" = ");
-         Serial.println(strings[n]);
-      }
-      */
-      // convert string data to numbers
-      power1 = atof(strings[0]) / 100;
-      power2 = atof(strings[1]) / 100;
-      newData = false;
-   }
+//============
+
+void parseData() {      // split the data into its parts
+  int buh, smuh;
+    char * strtokIndx; // this is used by strtok() as an index
+
+    strtokIndx = strtok(tempChars,",");      // get the first part - the string
+    Irms1 = atof(strtokIndx) / 100.0;  // copy it to messageFromPC
+ 
+    strtokIndx = strtok(NULL, ","); // this continues where the previous call left off
+    Irms2 = atof(strtokIndx) / 100.0;     // convert this part to an integer
+
+    strtokIndx = strtok(NULL, ",");
+    volts = atof(strtokIndx) / 100.0; 
+    
+    strtokIndx = strtok(NULL, ",");
+    freq = atof(strtokIndx) / 100.0; 
+    
+    strtokIndx = strtok(NULL, ","); // this continues where the previous call left off
+    realPower1 = atoi(strtokIndx);    // convert this part to a float
+    strtokIndx = strtok(NULL, ","); // this continues where the previous call left off
+    apparentPower1 = atoi(strtokIndx); 
+    strtokIndx = strtok(NULL, ","); // this continues where the previous call left off
+    wattHour1 = atol(strtokIndx); 
+ 
+
+    strtokIndx = strtok(NULL, ",");
+    powerFactor1 = atof(strtokIndx); 
+
+    strtokIndx = strtok(NULL, ","); // this continues where the previous call left off
+    realPower2 = atoi(strtokIndx);    // convert this part to a float
+    strtokIndx = strtok(NULL, ","); // this continues where the previous call left off
+    apparentPower2 = atoi(strtokIndx); 
+    strtokIndx = strtok(NULL, ","); // this continues where the previous call left off
+    wattHour2 = atol(strtokIndx); 
+
+
+    strtokIndx = strtok(NULL, ",");
+    powerFactor2 = atof(strtokIndx); 
+
+
 }
+
+
 
 void setup(void) {
    SerialPort.begin(9600, SERIAL_8N1, 16, 17); 
@@ -189,18 +209,38 @@ void setup(void) {
 void loop() {
       Blynk.run();
 
-   recvWithEndMarker();
-   parseData();
+    recvWithStartEndMarkers();
+    if (newData == true) {
+        strcpy(tempChars, receivedChars);
+            // this temporary copy is necessary to protect the original data
+            //   because strtok() used in parseData() replaces the commas with \0
+        parseData();
 
-       Irmstot = power1 + power2;
+        newData = false;
+    }
+
+       
       // double Irms = emon1.calcIrms(32, 1480);  // Calculate Irms only from Differential A2-A3 pins. NUMBER_OF_SAMPLES
       every(2000){
-
-        Blynk.virtualWrite(V3, Irmstot);
-        Blynk.virtualWrite(V2, (Irmstot*120.0));
-        Blynk.virtualWrite(V4, power1);
-        Blynk.virtualWrite(V5, power2);
-        
+        Irmstot = realPower1 + realPower2;
+        whtot = wattHour1 + wattHour2;
+        //Blynk.virtualWrite(V3, Irmstot);
+        //Blynk.virtualWrite(V2, (Irmstot*120.0));
+        Blynk.virtualWrite(V4, Irms1);
+        Blynk.virtualWrite(V5, Irms2);
+        Blynk.virtualWrite(V6, ((Irmstot)/1000.0));
+        Blynk.virtualWrite(V7, volts);
+        Blynk.virtualWrite(V8, freq);
+        Blynk.virtualWrite(V9, realPower1);
+        Blynk.virtualWrite(V18, realPower2);
+        Blynk.virtualWrite(V16, apparentPower1);
+        Blynk.virtualWrite(V11, apparentPower2);
+        Blynk.virtualWrite(V12, wattHour1);
+        Blynk.virtualWrite(V13, wattHour2);
+        Blynk.virtualWrite(V14, powerFactor1);
+        Blynk.virtualWrite(V15, powerFactor2);
+        Blynk.virtualWrite(V17, whtot);
+         
       }
       every(10000){
         bridge2.virtualWrite(V81, Irmstot);
