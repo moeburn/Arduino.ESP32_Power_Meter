@@ -31,8 +31,8 @@ void setup()
   //Serial.print("\nValues will be reported every ");  Serial.print(EmonLibCM_getDatalog_period()); Serial.println(" seconds");
   
   EmonLibCM_SetADC_VChannel(0, 85.67);                    // ADC Input channel, voltage calibration - for Ideal UK Adapter = 268.97 
-  EmonLibCM_SetADC_IChannel(1, 57.82, 0.6);                // ADC Input channel, current calibration, phase calibration
-  EmonLibCM_SetADC_IChannel(2, 57.82, 2.0);                //  The current channels will be read in this order
+  EmonLibCM_SetADC_IChannel(1, 51.19, 0.6);                // ADC Input channel, current calibration, phase calibration
+  EmonLibCM_SetADC_IChannel(2, 53.06, 2.0);                //  The current channels will be read in this order
              //  16.67 for 100 A : 50 mA c.t. with 120R burden - v.t. leads c.t by ~1 degree
 
   EmonLibCM_setADC(10, 104);                               // ADC Bits (10 for emonTx & Arduino except Due=12 bits, ADC Duration 104 us for 16 MHz operation)
