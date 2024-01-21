@@ -14,13 +14,15 @@ HardwareSerial SerialPort(2); // use UART2
 
 boolean newData = false;
 boolean seenData = false;
+boolean rolledOver = false;
 
 const byte numChars = 128;
 char receivedChars[numChars];
 char tempChars[numChars];        // temporary array for use when parsing
 
 
-long whtot, wattHour1, wattHour2;
+long whtot, wattHour1, wattHour2, dailywh, dailywhold, rolledoverwh;
+float dailykwh;
                // Create an instance
 
 const char* ssid = "mikesnet";
@@ -82,6 +84,9 @@ void printLocalTime() {
   time(&rawtime);
   timeinfo = localtime(&rawtime);
   terminal.println(asctime(timeinfo));
+        terminal.print(hours);
+        terminal.print(":");
+        terminal.println(mins);
   terminal.flush();
 }
 
@@ -240,9 +245,37 @@ void loop() {
         Blynk.virtualWrite(V14, powerFactor1);
         Blynk.virtualWrite(V15, powerFactor2);
         Blynk.virtualWrite(V17, whtot);
-         
+        Blynk.virtualWrite(V21, dailywh); 
+        Blynk.virtualWrite(V22, dailywhold);
       }
       every(10000){
         bridge2.virtualWrite(V81, Irmstot);
+
+        //if (dailywh < whtot) {dailywh += ((whtot-dailywh)-dailywhold);}
+        dailywh = whtot - dailywhold;
+
+        /*else if ((dailywh > whtot) && !rolledOver) {
+          dailywh += whtot;
+          rolledoverwh = whtot;
+          rolledOver = true;
+        }
+
+        else if ((dailywh > whtot) && rolledOver) {
+          dailywh += (whtot-rolledoverwh);
+          rolledoverwh = whtot;
+        }*/
+
+        struct tm timeinfo;
+        getLocalTime(&timeinfo);
+        hours = timeinfo.tm_hour;
+        mins = timeinfo.tm_min;    
+
+        if ((hours == 0) && (mins == 0) && (dailywh > 1000)) {
+          Blynk.virtualWrite(V23, dailywh);
+          dailywhold = dailywh;
+          dailykwh = dailywh/1000.0;
+          dailywh = 0;
+          Blynk.virtualWrite(V24, dailykwh);
+        }
       }
 }
