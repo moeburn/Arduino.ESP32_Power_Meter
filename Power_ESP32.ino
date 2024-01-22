@@ -15,6 +15,7 @@ HardwareSerial SerialPort(2); // use UART2
 boolean newData = false;
 boolean seenData = false;
 boolean rolledOver = false;
+bool passedMidnight = false;
 
 const byte numChars = 128;
 char receivedChars[numChars];
@@ -56,6 +57,8 @@ BLYNK_WRITE(V10) {
   if (String("help") == param.asStr()) {
     terminal.println("==List of available commands:==");
     terminal.println("wifi");
+    terminal.println("powers");
+    terminal.println("zero");
     terminal.println("==End of list.==");
   }
   if (String("wifi") == param.asStr()) {
@@ -67,7 +70,7 @@ BLYNK_WRITE(V10) {
     terminal.println(WiFi.RSSI());
     printLocalTime();
   }
-    if (String("temps") == param.asStr()) {
+    if (String("powers") == param.asStr()) {
 
     terminal.print("Irms: ");
     terminal.print(power1);
@@ -75,6 +78,14 @@ BLYNK_WRITE(V10) {
     terminal.println(power2);
     
   }
+    if (String("zero") == param.asStr()) {
+          dailywhold = whtot;  
+          terminal.println("Daily Watthour count has been reset");
+          terminal.print("New value to subtract: ");
+          terminal.println(dailywhold);
+          terminal.flush();       
+          printLocalTime();
+  }     
   terminal.flush();
 }
 
@@ -83,10 +94,7 @@ void printLocalTime() {
   struct tm* timeinfo;
   time(&rawtime);
   timeinfo = localtime(&rawtime);
-  terminal.println(asctime(timeinfo));
-        terminal.print(hours);
-        terminal.print(":");
-        terminal.println(mins);
+  terminal.print(asctime(timeinfo));
   terminal.flush();
 }
 
@@ -251,31 +259,34 @@ void loop() {
       every(10000){
         bridge2.virtualWrite(V81, Irmstot);
 
-        //if (dailywh < whtot) {dailywh += ((whtot-dailywh)-dailywhold);}
+
         dailywh = whtot - dailywhold;
 
-        /*else if ((dailywh > whtot) && !rolledOver) {
-          dailywh += whtot;
-          rolledoverwh = whtot;
-          rolledOver = true;
-        }
-
-        else if ((dailywh > whtot) && rolledOver) {
-          dailywh += (whtot-rolledoverwh);
-          rolledoverwh = whtot;
-        }*/
 
         struct tm timeinfo;
         getLocalTime(&timeinfo);
         hours = timeinfo.tm_hour;
         mins = timeinfo.tm_min;    
 
-        if ((hours == 0) && (mins == 0) && (dailywh > 1000)) {
+        if ((hours == 0) && (mins == 0)) {
+          if  (!passedMidnight){
           Blynk.virtualWrite(V23, dailywh);
-          dailywhold = dailywh;
           dailykwh = dailywh/1000.0;
-          dailywh = 0;
           Blynk.virtualWrite(V24, dailykwh);
+          printLocalTime();
+          terminal.print("Daily Wh, KWh: ");
+          terminal.print(dailywh);
+          terminal.print(", ");
+          terminal.println(dailykwh);
+          terminal.flush();
+          dailywhold = whtot;
+          
+          dailywh = 0;
+          passedMidnight = true;
+          }
+        }
+        if ((hours == 0) && (mins == 1)) {
+        passedMidnight = false;
         }
       }
 }
